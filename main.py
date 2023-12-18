@@ -41,7 +41,7 @@ def main():
     initial_sidebar_state="expanded"
 )
     
-    st.markdown("<h1 style='text-align: center; color: white;'>Spark Configuration Calculator</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; '>Spark Configuration Calculator</h1>", unsafe_allow_html=True)
     columns = st.columns(8)
 
     with columns[2]:
