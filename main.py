@@ -148,7 +148,7 @@ def main():
     
         
     with right:
-        results, memory_breakdown, revised = st.tabs(["Recommended configurations", "On-heap Memory Breakdown", "Revised Configurations"])
+        results, memory_breakdown, revised = st.tabs(["Recommended configurations", "On-heap Memory Breakdown", "Revised Configurations (DefaultResourceCalculator)"])
         
         with results:
             df = pd.DataFrame({
