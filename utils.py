@@ -34,8 +34,8 @@ def solve_equation(yarn_memory_mb, spark_executor_memory_overhead_percent, spark
 
 def set_page_header_format():
     st.set_page_config(
-    page_title="Spark Configuration Tool",
-    page_icon="🧊",
+    page_title="Spark Configuration Calculator",
+    page_icon="🕵️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -91,6 +91,19 @@ def revised_recommendations(num_workers, capacity_scheduler, cores_per_node, yar
         else:
             st.write("Not applicable for DominantResourceCalculator")
 
+def generate_spark_submit_command(spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_executor_memory, num_executors):
+
+    command = f"spark-submit --class {spark_submit_deploy_mode} --master yarn --deploy-mode {spark_submit_deploy_mode} \
+        --executor-memory {int(spark_executor_memory)}m --executor-cores {spark_executor_cores} --num-executors {num_executors} \
+            --conf spark.memory.fraction={spark_memory_fraction} --conf spark.memory.storageFraction={spark_memory_storage_fraction} \
+                --conf spark.memory.offHeap.size={spark_offheap_memory} --conf spark.executor.memoryOverheadFactor={spark_executor_memory_overhead_percent} \
+                    --conf spark.dynamicAllocation.initialExecutors={num_executors} --conf spark.dynamicAllocation.enabled=true"
+    
+    return command
+
+
+
+
 def create_recommendations_matrix(spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_executor_memory, num_executors):
     return pd.DataFrame({
                         'Recommended Spark Configurations': [
@@ -141,7 +154,7 @@ def memory_breakdown_guidance(total_yarn_memory_mb, memory_breakdown, storage_me
 def display_utilisation_scorecard(total_yarn_memory_mb, total_memory_utilised, total_cores_utilised, total_physical_cores):
     utilisation_container = st.container(border=True)
     title , memory, cpu = utilisation_container.columns(3)
-    title.write("Utilisation Scorecard")
+    title.markdown("<h5 style='text-align: center; vertical-align: middle;'>Utilisation Scorecard</h5>", unsafe_allow_html=True)
     memory.metric("Memory Utilisation", f"{total_memory_utilised}m" , f"{round((total_memory_utilised - total_yarn_memory_mb)/total_yarn_memory_mb*100,2)}%", help="There will always be some under-utilisation since a minimum of 384 MiB overhead is required" )
     cpu.metric("CPU Utilisation", f"{total_cores_utilised} vcores" , f"{round((total_cores_utilised - total_physical_cores)/total_physical_cores*100,2)}%" )
 
