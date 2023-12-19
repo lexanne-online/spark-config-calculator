@@ -110,7 +110,7 @@ def revised_recommendations(num_workers, capacity_scheduler, cores_per_node, yar
         else:
             st.write("Not applicable for DominantResourceCalculator")
 
-def memory_breakdown(total_yarn_memory_mb, memory_breakdown, storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores):
+def memory_breakdown_guidance(total_yarn_memory_mb, memory_breakdown, storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores):
     with memory_breakdown:
         st.write(pd.DataFrame({
                 'Memory Type' : [
