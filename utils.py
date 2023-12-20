@@ -411,10 +411,12 @@ def construct_dataproc_submit_command(df, cluster_name, region):
     configurations = df["Recommended Spark Configurations"]
 
     # Construct the Spark-submit command
-    spark_submit_command = "spark-submit"
+    spark_submit_command = "./bin/spark-submit --class <main class> --master yarn"
 
     for config in configurations:
         spark_submit_command += f" --conf {config}"
+    
+    spark_submit_command += f" <app jar path>"
 
     properties = ','.join(configurations)
     # Construct the Dataproc job submission command
