@@ -107,7 +107,7 @@ def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores
                             yarn_memory_mb, total_yarn_memory_mb, spark_executor_cores, \
                                 spark_executor_memory_overhead_percent, spark_memory_fraction, \
                                     spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, \
-                                        spark_onheap_memory, revised, total_physical_cores):
+                                        spark_onheap_memory, revised, total_physical_cores, spark_dynamicallocation_enabled):
     with revised:
         if capacity_scheduler == "Default Resource Calculator":
             revised_spark_executor_memory = convert_to_megabytes(st.text_input("Revised spark.executor.memory", value=str(spark_onheap_memory) + 'm'))
@@ -122,7 +122,7 @@ def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores
                 df_revised = create_recommendations_matrix(spark_executor_cores, spark_executor_memory_overhead_percent, \
                                                         spark_memory_fraction, spark_memory_storage_fraction, \
                                                             spark_offheap_memory, spark_submit_deploy_mode, \
-                                                                revised_spark_executor_memory, revised_num_executors)
+                                                                revised_spark_executor_memory, revised_num_executors, spark_dynamicallocation_enabled)
                 
                 job_submission_display_tabs(df_revised)
                 
@@ -179,7 +179,16 @@ def generate_spark_submit_command(spark_executor_cores, spark_executor_memory_ov
 
 
 
-def create_recommendations_matrix(spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_executor_memory, num_executors):
+def create_recommendations_matrix(spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_executor_memory, num_executors, spark_dynamicallocation_enabled):
+    
+    if spark_dynamicallocation_enabled == "true":
+        executor_string = [f"spark.dynamicAllocation.initialExecutors={num_executors}","spark.dynamicAllocation.enabled=true"]
+        executor_explanation = [f"Initial number of executors to run if dynamic allocation is enabled.", \
+                    f"Whether to use dynamic resource allocation, which scales the number of executors registered with this application up and down based on the workload."]
+    else:
+        executor_string = [f"spark.executor.instances={num_executors}"]
+        executor_explanation = [f"The number of executors to launch for this application."]
+
     
     return pd.DataFrame({
                         'Recommended Spark Configurations': [
@@ -189,24 +198,20 @@ def create_recommendations_matrix(spark_executor_cores, spark_executor_memory_ov
                     f"spark.memory.storageFraction={spark_memory_storage_fraction}",
                     f"spark.memory.offHeap.size={spark_offheap_memory}",
                     f"spark.executor.memoryOverheadFactor={spark_executor_memory_overhead_percent}",
-                    f"spark.dynamicAllocation.initialExecutors={num_executors}",
-                    f"spark.dynamicAllocation.enabled=true",
                     f"spark.submit.deployMode={spark_submit_deploy_mode}",
                     f"spark.sql.adaptive.enabled=true",
                     f"spark.serializer=org.apache.spark.serializer.KryoSerializer"
-                    ], 'Explanation' : [
+                    ] + executor_string, 'Explanation' : [
                     f"Amount of memory to use per executor process",
                     "The number of cores to use on each executor in Yarn.  \n  In standalone mode, this will equal all the cores in a node",
                     f"Fraction of (heap space - 300MB) used for execution and storage. The lower this is, the more frequently spills and cached data eviction occur. The purpose of this config is to set aside memory for internal metadata, user data structures, and imprecise size estimation in the case of sparse, unusually large records.",
                     f"Amount of storage memory immune to eviction, expressed as a fraction of the size of the region set aside by spark.memory.fraction. The higher this is, the less working memory may be available to execution and tasks may spill to disk more often",
                     f"The absolute amount of memory which can be used for off-heap allocation, in bytes unless otherwise specified. This setting has no impact on heap memory usage, so if your executors' total memory consumption must fit within some hard limit then be sure to shrink your JVM heap size accordingly. ",
                     f"Fraction of executor memory to be allocated as additional non-heap memory per executor process. This is memory that accounts for things like VM overheads, interned strings, other native overheads, etc. This tends to grow with the container size.",
-                    f"Initial number of executors to run if dynamic allocation is enabled.",
-                    f"Whether to use dynamic resource allocation, which scales the number of executors registered with this application up and down based on the workload.",
                     f"Whether to run in client or cluster mode. Cluster mode will run the AM in a Yarn container while client mode will run the AM in the master node",
                     f"Adaptive Query Execution (AQE) is an optimization technique in Spark SQL that makes use of the runtime statistics to choose the most efficient query execution plan, which is enabled by default since Apache Spark 3.2.0",
                     f"This setting configures the serializer used for not only shuffling data between worker nodes but also when serializing RDDs to disk. This is recommended over the Java serializer"
-                    ]
+                    ] + executor_explanation
                     })
 
 def memory_breakdown_guidance(total_yarn_memory_mb, memory_breakdown, storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores):
@@ -241,7 +246,7 @@ def display_utilisation_scorecard(total_yarn_memory_mb, total_memory_utilised, t
     memory.metric("Memory Utilisation", f"{total_memory_utilised}m" , f"{round((total_memory_utilised - total_yarn_memory_mb)/total_yarn_memory_mb*100,2)}%", help="There will always be some under-utilisation since a minimum of 384 MiB overhead is required" )
     cpu.metric("CPU Utilisation", f"{total_cores_utilised} vcores" , f"{round((total_cores_utilised - total_physical_cores)/total_physical_cores*100,2)}%" )
 
-def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results):
+def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results, spark_dynamicallocation_enabled):
     
     with results:
         if spark_num_executors > 0:
@@ -249,7 +254,7 @@ def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory
             df = create_recommendations_matrix(spark_executor_cores, spark_executor_memory_overhead_percent, \
                                             spark_memory_fraction, spark_memory_storage_fraction, \
                                                 spark_offheap_memory, spark_submit_deploy_mode, \
-                                                    spark_onheap_memory, spark_num_executors)
+                                                    spark_onheap_memory, spark_num_executors, spark_dynamicallocation_enabled)
             
             job_submission_display_tabs(df)            
             st.write(df)
@@ -298,6 +303,8 @@ def spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vc
                                                     - This is a nice matrix to understand the different implications of this property on logging behavior - https://cloud.google.com/dataproc/docs/guides/dataproc-job-output#spark_driver_logs
                                                     """)
             
+        spark_dynamicallocation_enabled = st.selectbox("spark.dynamicAllocation.enabled", options = ["true", "false"])
+        
         num_executors_per_node_cores = yarn_cpu_vcores / spark_executor_cores
         num_executors_per_node = math.floor(num_executors_per_node_cores)
             
@@ -307,14 +314,17 @@ def spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vc
         spark_num_executors = max(0,num_executors_per_node*num_workers) if spark_submit_deploy_mode == "client" else max(0,num_executors_per_node*num_workers) - 1
         
 
-    return spark_executor_cores,spark_executor_memory_overhead_percent,spark_memory_fraction,spark_memory_storage_fraction,spark_offheap_memory,spark_submit_deploy_mode,num_executors_per_node,spark_onheap_memory,spark_num_executors
+    return spark_executor_cores,spark_executor_memory_overhead_percent,spark_memory_fraction,spark_memory_storage_fraction,spark_offheap_memory,spark_submit_deploy_mode,num_executors_per_node,spark_onheap_memory,spark_num_executors, spark_dynamicallocation_enabled
 
 def node_config(node, num_workers, capacity_scheduler):
     with node:
 
-        total_ram_per_node = st.number_input("Total RAM per node in GB", value=64)
+        total_ram_per_node = st.number_input("Total RAM per node in GB", value=16)
         cores_per_node = st.number_input("Cores per node", 1, 100, value=4)
-        percent_ram_for_os = st.number_input("Percent of RAM for OS", 0, 100, value=10, help="At least GiB should be reserved for OS daemons")
+        yarn_memory_mb = st.number_input("YARN memory per node in MB", value=total_ram_per_node*1024 - total_ram_per_node*1024*0.15, help="""
+                                        - Provide the value of yarn.nodemananger.resource.memory-mb property in the `yarn-site.xml` file
+                                        - Dataproc sets this value to 80-90% of the total memory depending on the machine type
+                                         """)
             
             
         yarn_cpu_vcores = cores_per_node
@@ -336,8 +346,8 @@ def node_config(node, num_workers, capacity_scheduler):
                 yarn_cpu_vcores = st.number_input(f"YARN CPU vCores", value=cores_per_node, disabled=True,help="1 core should be reserved for OS daemons")
 
         yarn_cpu_vcores = yarn_cpu_vcores - 1 if reserve_core == "Yes" else yarn_cpu_vcores
-        yarn_memory_gb = (1 - percent_ram_for_os/100) * total_ram_per_node
-        yarn_memory_mb = convert_to_megabytes(f"{yarn_memory_gb}g")
+        #yarn_memory_gb = (1 - percent_ram_for_os/100) * total_ram_per_node
+        #yarn_memory_mb = convert_to_megabytes(f"{yarn_memory_gb}g")
         total_yarn_memory_mb = yarn_memory_mb * num_workers
     return cores_per_node,yarn_cpu_vcores,reserve_core,yarn_memory_mb,total_yarn_memory_mb
 
