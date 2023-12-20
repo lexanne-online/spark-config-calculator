@@ -22,12 +22,25 @@ def main():
         
     with right_container:
         
-        results, memory_breakdown, revised = st.tabs(["Recommended configurations", "On-heap Memory Breakdown", "Revised Configurations (DefaultResourceCalculator)"])
+        if capacity_scheduler == "Default Resource Calculator":
+            
+            results, memory_breakdown, revised, revised_memory_breakdown = st.tabs(["Recommended configurations", "On-heap Memory Breakdown", "Revised Configurations", "Revised Memory Breakdown"])
         
-        storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores = recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results)
-        memory_breakdown_guidance(total_yarn_memory_mb, memory_breakdown, storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores)
-        revised_recommendations(num_workers, capacity_scheduler, cores_per_node, yarn_memory_mb, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_onheap_memory, revised, total_physical_cores) 
+            storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores = recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results)
+            memory_breakdown_guidance(total_yarn_memory_mb, memory_breakdown, storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores)
+            
+            try:
+                rev_storage_memory, rev_execution_memory, rev_user_memory, rev_total_memory_utilised, rev_total_cores_utilised, rev_total_physical_cores = revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores_per_node, yarn_memory_mb, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_onheap_memory, revised, total_physical_cores) 
+                memory_breakdown_guidance(total_yarn_memory_mb, revised_memory_breakdown, rev_storage_memory, rev_execution_memory, rev_user_memory, rev_total_memory_utilised, rev_total_cores_utilised, rev_total_physical_cores)
+            except TypeError:
+                pass
+        else:
+            results, memory_breakdown = st.tabs(["Recommended configurations", "On-heap Memory Breakdown"])
+            storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores = recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results)
+            memory_breakdown_guidance(total_yarn_memory_mb, memory_breakdown, storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores)
         
+        
+
         recommendation_notes = st.container(border=True)
         if capacity_scheduler == "Default Resource Calculator" :
             recommendation_notes.markdown("""

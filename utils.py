@@ -103,7 +103,11 @@ def set_page_header_format():
     #_, feedback, _ = st.columns(3)
     #feedback.markdown("""Share your feedback at [Github Repo Issues](https://github.com/datasherlock/spark-config-calculator/issues)""")
 
-def revised_recommendations(num_workers, capacity_scheduler, cores_per_node, yarn_memory_mb, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_onheap_memory, revised, total_physical_cores):
+def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores_per_node, \
+                            yarn_memory_mb, total_yarn_memory_mb, spark_executor_cores, \
+                                spark_executor_memory_overhead_percent, spark_memory_fraction, \
+                                    spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, \
+                                        spark_onheap_memory, revised, total_physical_cores):
     with revised:
         if capacity_scheduler == "Default Resource Calculator":
             revised_spark_executor_memory = convert_to_megabytes(st.text_input("Revised spark.executor.memory", value=str(spark_onheap_memory) + 'm'))
@@ -125,16 +129,32 @@ def revised_recommendations(num_workers, capacity_scheduler, cores_per_node, yar
                 st.write(df_revised)
                 revised_memory_utilised = round(revised_spark_executor_memory * revised_num_executors_per_node_memory* num_workers ,2)
                 revised_cores_utilised = spark_executor_cores * revised_num_executors_per_node_memory* num_workers 
+                
+                      
+                storage_memory = round((revised_spark_executor_memory - 300) * spark_memory_storage_fraction * spark_memory_fraction,2)
+                execution_memory = round((revised_spark_executor_memory - 300) * spark_memory_fraction * (1 - spark_memory_storage_fraction),2)
+                user_memory = round(revised_spark_executor_memory - (storage_memory + execution_memory) - 300,2)
+                        
+                
+                total_memory_utilised = revised_memory_utilised
+                total_cores_utilised = revised_cores_utilised
+
+                total_memory_utilised = round(revised_spark_executor_memory * revised_num_executors_per_node_memory * num_workers,2)
+                total_cores_utilised = spark_executor_cores * revised_num_executors_per_node_memory * num_workers
+                total_physical_cores = (cores_per_node - 1)*num_workers if reserve_core == "Yes" else cores_per_node * num_workers
+
                 physical_cores = cores_per_node*num_workers
                     
                 display_utilisation_scorecard(total_yarn_memory_mb, revised_memory_utilised, revised_cores_utilised, total_physical_cores)
-                
+                return storage_memory,execution_memory,user_memory,total_memory_utilised,total_cores_utilised,total_physical_cores    
             else:
                 st.warning("No executors can be allocated with the current configurations. Please tune the parameters")
             
                 
         else:
             st.write("Not applicable for DominantResourceCalculator")
+    
+    
 
 def job_submission_display_tabs(df_revised):
     spark_submit, dp_submit = construct_dataproc_submit_command(df_revised)
