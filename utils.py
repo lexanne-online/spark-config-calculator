@@ -107,11 +107,15 @@ def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores
                             yarn_memory_mb, total_yarn_memory_mb, spark_executor_cores, \
                                 spark_executor_memory_overhead_percent, spark_memory_fraction, \
                                     spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, \
-                                        spark_onheap_memory, revised, total_physical_cores, spark_dynamicallocation_enabled):
+                                        spark_onheap_memory, revised, total_physical_cores, spark_dynamicallocation_enabled, \
+                                            cluster_name, region):
     with revised:
         if capacity_scheduler == "Default Resource Calculator":
             revised_spark_executor_memory = convert_to_megabytes(st.text_input("Revised spark.executor.memory", value=str(spark_onheap_memory) + 'm'))
-            revised_num_executors_per_node_memory = math.floor(yarn_memory_mb/ (spark_offheap_memory  + spark_executor_memory_overhead_percent*revised_spark_executor_memory + revised_spark_executor_memory))
+            
+            revised_total_container_size_mb = revised_spark_executor_memory + spark_offheap_memory + max(384,spark_executor_memory_overhead_percent*revised_spark_executor_memory)
+            
+            revised_num_executors_per_node_memory = math.floor(yarn_memory_mb/ (spark_offheap_memory  + max(384,spark_executor_memory_overhead_percent*revised_spark_executor_memory) + revised_spark_executor_memory))
             revised_num_executors = max(0,revised_num_executors_per_node_memory*num_workers) if spark_submit_deploy_mode == "client" else max(0,revised_num_executors_per_node_memory*num_workers) - 1
             
 
@@ -124,10 +128,13 @@ def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores
                                                             spark_offheap_memory, spark_submit_deploy_mode, \
                                                                 revised_spark_executor_memory, revised_num_executors, spark_dynamicallocation_enabled)
                 
-                job_submission_display_tabs(df_revised)
+                job_submission_display_tabs(df_revised, cluster_name, region)
                 
                 st.write(df_revised)
-                revised_memory_utilised = round(revised_spark_executor_memory * revised_num_executors_per_node_memory* num_workers ,2)
+                
+                revised_memory_utilised = round((revised_spark_executor_memory + spark_offheap_memory + \
+                                                 max(384, revised_spark_executor_memory*spark_executor_memory_overhead_percent)) * \
+                                                    revised_num_executors_per_node_memory* num_workers ,2)
                 revised_cores_utilised = spark_executor_cores * revised_num_executors_per_node_memory* num_workers 
                 
                       
@@ -135,18 +142,12 @@ def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores
                 execution_memory = round((revised_spark_executor_memory - 300) * spark_memory_fraction * (1 - spark_memory_storage_fraction),2)
                 user_memory = round(revised_spark_executor_memory - (storage_memory + execution_memory) - 300,2)
                         
-                
-                total_memory_utilised = revised_memory_utilised
-                total_cores_utilised = revised_cores_utilised
-
-                total_memory_utilised = round(revised_spark_executor_memory * revised_num_executors_per_node_memory * num_workers,2)
-                total_cores_utilised = spark_executor_cores * revised_num_executors_per_node_memory * num_workers
                 total_physical_cores = (cores_per_node - 1)*num_workers if reserve_core == "Yes" else cores_per_node * num_workers
 
                 physical_cores = cores_per_node*num_workers
                     
                 display_utilisation_scorecard(total_yarn_memory_mb, revised_memory_utilised, revised_cores_utilised, total_physical_cores)
-                return storage_memory,execution_memory,user_memory,total_memory_utilised,total_cores_utilised,total_physical_cores    
+                return storage_memory,execution_memory,user_memory,revised_memory_utilised,revised_cores_utilised,total_physical_cores    
             else:
                 st.warning("No executors can be allocated with the current configurations. Please tune the parameters")
             
@@ -156,8 +157,8 @@ def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores
     
     
 
-def job_submission_display_tabs(df_revised):
-    spark_submit, dp_submit_spark, dp_submit_pyspark = construct_dataproc_submit_command(df_revised)
+def job_submission_display_tabs(df_revised, cluster_name, region):
+    spark_submit, dp_submit_spark, dp_submit_pyspark = construct_dataproc_submit_command(df_revised, cluster_name, region)
     spark_submit_tab, dp_submit_spark_tab, dp_submit_pyspark_tab = st.tabs(["Spark Submit Command", "Dataproc Submit Command", "Dataproc Pyspark Submit Command"])
     with spark_submit_tab:
         st.code(spark_submit, language="bash")
@@ -200,7 +201,9 @@ def create_recommendations_matrix(spark_executor_cores, spark_executor_memory_ov
                     f"spark.executor.memoryOverheadFactor={spark_executor_memory_overhead_percent}",
                     f"spark.submit.deployMode={spark_submit_deploy_mode}",
                     f"spark.sql.adaptive.enabled=true",
-                    f"spark.serializer=org.apache.spark.serializer.KryoSerializer"
+                    f"spark.serializer=org.apache.spark.serializer.KryoSerializer",
+                    f"spark.driver.memory={int(spark_executor_memory)}m",
+                    f"spark.driver.cores={spark_executor_cores}"
                     ] + executor_string, 'Explanation' : [
                     f"Amount of memory to use per executor process",
                     "The number of cores to use on each executor in Yarn.  \n  In standalone mode, this will equal all the cores in a node",
@@ -210,7 +213,9 @@ def create_recommendations_matrix(spark_executor_cores, spark_executor_memory_ov
                     f"Fraction of executor memory to be allocated as additional non-heap memory per executor process. This is memory that accounts for things like VM overheads, interned strings, other native overheads, etc. This tends to grow with the container size.",
                     f"Whether to run in client or cluster mode. Cluster mode will run the AM in a Yarn container while client mode will run the AM in the master node",
                     f"Adaptive Query Execution (AQE) is an optimization technique in Spark SQL that makes use of the runtime statistics to choose the most efficient query execution plan, which is enabled by default since Apache Spark 3.2.0",
-                    f"This setting configures the serializer used for not only shuffling data between worker nodes but also when serializing RDDs to disk. This is recommended over the Java serializer"
+                    f"This setting configures the serializer used for not only shuffling data between worker nodes but also when serializing RDDs to disk. This is recommended over the Java serializer",
+                    f"Amount of memory to use for the driver process",
+                    f"The number of cores to use on the driver process"
                     ] + executor_explanation
                     })
 
@@ -246,7 +251,7 @@ def display_utilisation_scorecard(total_yarn_memory_mb, total_memory_utilised, t
     memory.metric("Memory Utilisation", f"{total_memory_utilised}m" , f"{round((total_memory_utilised - total_yarn_memory_mb)/total_yarn_memory_mb*100,2)}%", help="There will always be some under-utilisation since a minimum of 384 MiB overhead is required" )
     cpu.metric("CPU Utilisation", f"{total_cores_utilised} vcores" , f"{round((total_cores_utilised - total_physical_cores)/total_physical_cores*100,2)}%" )
 
-def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results, spark_dynamicallocation_enabled):
+def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results, spark_dynamicallocation_enabled, cluster_name, region):
     
     with results:
         if spark_num_executors > 0:
@@ -256,7 +261,7 @@ def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory
                                                 spark_offheap_memory, spark_submit_deploy_mode, \
                                                     spark_onheap_memory, spark_num_executors, spark_dynamicallocation_enabled)
             
-            job_submission_display_tabs(df)            
+            job_submission_display_tabs(df, cluster_name, region)            
             st.write(df)
         else:
             st.warning("No executors can be allocated with the current configurations. Please tune the parameters")
@@ -265,7 +270,7 @@ def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory
         execution_memory = round((spark_onheap_memory - 300) * spark_memory_fraction * (1 - spark_memory_storage_fraction),2)
         user_memory = round(spark_onheap_memory - (storage_memory + execution_memory) - 300,2)
 
-        total_memory_utilised = round(spark_onheap_memory * num_executors_per_node * num_workers,2)
+        total_memory_utilised = round((spark_onheap_memory + spark_offheap_memory + spark_executor_memory_overhead_percent*spark_onheap_memory) * num_executors_per_node * num_workers,2)
         total_cores_utilised = spark_executor_cores * num_executors_per_node * num_workers
         total_physical_cores = (cores_per_node - 1)*num_workers if reserve_core == "Yes" else cores_per_node * num_workers
         
@@ -310,7 +315,6 @@ def spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vc
             
         
         spark_onheap_memory = solve_equation(yarn_memory_mb, spark_executor_memory_overhead_percent, spark_offheap_memory, num_executors_per_node)
-            
         spark_num_executors = max(0,num_executors_per_node*num_workers) if spark_submit_deploy_mode == "client" else max(0,num_executors_per_node*num_workers) - 1
         
 
@@ -355,7 +359,10 @@ def cluster_configs(cluster):
     with cluster:
         container_configs = st.container(border=True)
         num_workers = container_configs.number_input("Enter number of worker nodes", 2, 100, help = "Managed Spark clusters like Dataproc require at least 2 worker nodes")
-        
+        cluster_name = container_configs.text_input("Enter cluster name", value="demo-cluster")
+        region = container_configs.text_input("Enter GCP region", value="us-central1")
+
+
         scheduler_help_notes = """
                             - This property is set in the capacity-scheduler.xml file.  
                             ``` 
@@ -373,7 +380,7 @@ def cluster_configs(cluster):
         capacity_scheduler = container_configs.selectbox("Capacity Scheduler", options=["Dominant Resource Calculator", "Default Resource Calculator"], help=scheduler_help_notes)
         
                                 
-    return num_workers,capacity_scheduler
+    return num_workers,capacity_scheduler, cluster_name, region
 
 def set_footer():
     diagrams, links = st.tabs(["Handy diagrams", "Reference links"])
@@ -385,30 +392,8 @@ def set_footer():
                     - https://spark.apache.org/docs/3.5.0/tuning.html)
                     """)
         
-def construct_spark_submit_command(df):
-    """
-    Construct a spark-submit command from a DataFrame with Spark configurations.
 
-    Parameters:
-    - df: DataFrame with columns "Recommended Spark Configurations" and "Explanation".
-
-    Returns:
-    - str: Spark-submit command.
-    """
-    # Extract configurations from the DataFrame
-    configurations = df["Recommended Spark Configurations"]
-
-    # Construct the Spark-submit command
-    spark_submit_command = "spark-submit"
-
-    for config in configurations:
-        spark_submit_command += f" --conf {config}"
-
-    return spark_submit_command
-
-import pandas as pd
-
-def construct_dataproc_submit_command(df, main_class=None, jar_path=None):
+def construct_dataproc_submit_command(df, cluster_name, region):
     """
     Construct a Dataproc job submission command from a DataFrame with Spark configurations.
 
@@ -433,8 +418,8 @@ def construct_dataproc_submit_command(df, main_class=None, jar_path=None):
 
     properties = ','.join(configurations)
     # Construct the Dataproc job submission command
-    dataproc_spark_submit_command = f"gcloud dataproc jobs submit spark --cluster <cluster_name> --region <region>  --properties {properties} --class <main_class> <jar_path>"
-    dataproc_pyspark_submit_command = f"gcloud dataproc jobs submit pyspark <script_path> --cluster <cluster_name> --region <region>  --properties {properties} -- <args>"
+    dataproc_spark_submit_command = f"gcloud dataproc jobs submit spark --cluster {cluster_name} --region {region}  --properties {properties} --class <main_class> <jar_path>"
+    dataproc_pyspark_submit_command = f"gcloud dataproc jobs submit pyspark <script_path> --cluster {cluster_name} --region {region}  --properties {properties} -- <args>"
 
     return spark_submit_command, dataproc_spark_submit_command, dataproc_pyspark_submit_command
 
