@@ -248,7 +248,7 @@ def display_utilisation_scorecard(total_yarn_memory_mb, total_memory_utilised, t
     utilisation_container = st.container(border=True)
     title , memory, cpu = utilisation_container.columns(3)
     title.markdown("<h5 style='text-align: center; vertical-align: middle;'>Utilisation Scorecard</h5>", unsafe_allow_html=True)
-    memory.metric("Memory Utilisation", f"{total_memory_utilised}m" , f"{round((total_memory_utilised - total_yarn_memory_mb)/total_yarn_memory_mb*100,2)}%", help="There will always be some under-utilisation since a minimum of 384 MiB overhead is required" )
+    memory.metric("Memory Utilisation", f"{total_memory_utilised}m" , f"{round((total_memory_utilised - total_yarn_memory_mb)/total_yarn_memory_mb*100,2)}%", help="This is the total memory utilised by the containers scheduled by Yarn for the application. This includes offhead and overhead memory" )
     cpu.metric("CPU Utilisation", f"{total_cores_utilised} vcores" , f"{round((total_cores_utilised - total_physical_cores)/total_physical_cores*100,2)}%" )
 
 def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results, spark_dynamicallocation_enabled, cluster_name, region):
