@@ -1,4 +1,4 @@
 scipy==1.11.4
 streamlit==1.29.0
 pandas==2.1.4
-streamlit_extraspip3
+streamlit_extras
