@@ -2,6 +2,7 @@ import math
 import streamlit as st
 import pandas as pd
 from scipy.optimize import fsolve
+from streamlit_extras.buy_me_a_coffee import button
 
 def convert_to_megabytes(size_str):
     if size_str[-1] == 'k':
@@ -38,25 +39,66 @@ def set_page_header_format():
     page_icon="🕵️",
     layout="wide",
     initial_sidebar_state="expanded"
-)
-    st.write('<style>div.block-container{padding-top:0rem;}</style>', unsafe_allow_html=True)
+    )
+
+    st.markdown(
+        """
+            <style>
+                .appview-container .main .block-container {{
+                    padding-top: {padding_top}rem;
+                    padding-bottom: {padding_bottom}rem;
+                    }}
+
+            </style>""".format(
+            padding_top=0, padding_bottom=1
+        ),
+        unsafe_allow_html=True,
+    )
+
+    navbar = """
+        <style>
+            .navbar {
+                background-color: #333;
+                padding: 10px;
+                color: white;
+                text-align: center;
+                top-margin: 0px;
+                
+            }
+            .navbar a {
+                color: white;
+                text-decoration: none;
+                padding: 10px;
+            }
+        </style>
+        <div class="navbar">
+            <a href="https://www.jeromerajan.com">About</a>
+            <a href="https://linkedin.com/in/jeromerajan">LinkedIn</a>
+            <a href="https://medium.com/@datasherlock">Medium</a>
+            <a href="https://github.com/datasherlock">Github</a>
+            <a href="https://buymeacoffee.com/datasherlock">Buy me a coffee</a>
+        </div>
+    """
     
     st.markdown("<h1 style='text-align: center; '>Spark Configuration Calculator</h1>", unsafe_allow_html=True)
-    columns = st.columns(8)
-
-    with columns[2]:
-        st.write("""<div style="width:100%;text-align:center;"><a href="https://www.jeromerajan.com" style="float:center"><img src="https://cdn0.iconfinder.com/data/icons/england-13/504/sherlock-holmes-detective-inspector-man-512.png" width="22px"></img></a></div>""", unsafe_allow_html=True)
+    st.markdown(navbar, unsafe_allow_html=True)
 
     
-    with columns[3]:
-        st.write("""<div style="width:100%;text-align:center;"><a href="https://linkedin.com/in/jeromerajan" style="float:center"><img src="https://cdn2.iconfinder.com/data/icons/social-media-applications/64/social_media_applications_14-linkedin-512.png" width="22px"></img></a></div>""", unsafe_allow_html=True)
-        
-    with columns[4]:
-        st.write("""<div style="width:100%;text-align:center;"><a href="https://medium.com/@datasherlock" style="float:center"><img src="https://cdn2.iconfinder.com/data/icons/social-icons-33/128/Medium-512.png" width="22px"></img></a></div>""", unsafe_allow_html=True)
-        
-    with columns[5]:
-        st.write("""<div style="width:100%;text-align:center;"><a href="https://github.com/datasherlock" style="float:center"><img src="https://cdn3.iconfinder.com/data/icons/social-media-2169/24/social_media_social_media_logo_github_2-512.png" width="22px"></img></a></div>""", unsafe_allow_html=True)
+    # columns = st.columns(8)
 
+    # with columns[2]:
+    #     st.write("""<div style="width:100%;text-align:center;"><a href="https://www.jeromerajan.com" style="float:center"><img src="https://cdn0.iconfinder.com/data/icons/england-13/504/sherlock-holmes-detective-inspector-man-512.png" width="22px"></img></a></div>""", unsafe_allow_html=True)
+
+    
+    # with columns[3]:
+    #     st.write("""<div style="width:100%;text-align:center;"><a href="https://linkedin.com/in/jeromerajan" style="float:center"><img src="https://cdn2.iconfinder.com/data/icons/social-media-applications/64/social_media_applications_14-linkedin-512.png" width="22px"></img></a></div>""", unsafe_allow_html=True)
+        
+    # with columns[4]:
+    #     st.write("""<div style="width:100%;text-align:center;"><a href="https://medium.com/@datasherlock" style="float:center"><img src="https://cdn2.iconfinder.com/data/icons/social-icons-33/128/Medium-512.png" width="22px"></img></a></div>""", unsafe_allow_html=True)
+        
+    # with columns[5]:
+    #     st.write("""<div style="width:100%;text-align:center;"><a href="https://github.com/datasherlock" style="float:center"><img src="https://cdn3.iconfinder.com/data/icons/social-media-2169/24/social_media_social_media_logo_github_2-512.png" width="22px"></img></a></div>""", unsafe_allow_html=True)
+    
     st.markdown("""---""")
     #_, feedback, _ = st.columns(3)
     #feedback.markdown("""Share your feedback at [Github Repo Issues](https://github.com/datasherlock/spark-config-calculator/issues)""")
@@ -77,6 +119,9 @@ def revised_recommendations(num_workers, capacity_scheduler, cores_per_node, yar
                                                         spark_memory_fraction, spark_memory_storage_fraction, \
                                                             spark_offheap_memory, spark_submit_deploy_mode, \
                                                                 revised_spark_executor_memory, revised_num_executors)
+                
+                job_submission_display_tabs(df_revised)
+                
                 st.write(df_revised)
                 revised_memory_utilised = round(revised_spark_executor_memory * revised_num_executors_per_node_memory* num_workers ,2)
                 revised_cores_utilised = spark_executor_cores * revised_num_executors_per_node_memory* num_workers 
@@ -90,6 +135,14 @@ def revised_recommendations(num_workers, capacity_scheduler, cores_per_node, yar
                 
         else:
             st.write("Not applicable for DominantResourceCalculator")
+
+def job_submission_display_tabs(df_revised):
+    spark_submit, dp_submit = construct_dataproc_submit_command(df_revised)
+    spark_submit_tab, dp_submit_tab = st.tabs(["Spark Submit Command", "Dataproc Submit Command"])
+    with spark_submit_tab:
+        st.code(spark_submit, language="bash")
+    with dp_submit_tab:
+        st.code(dp_submit, language="bash")
 
 def generate_spark_submit_command(spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_executor_memory, num_executors):
 
@@ -105,6 +158,7 @@ def generate_spark_submit_command(spark_executor_cores, spark_executor_memory_ov
 
 
 def create_recommendations_matrix(spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_executor_memory, num_executors):
+    
     return pd.DataFrame({
                         'Recommended Spark Configurations': [
                     f"spark.executor.memory = {int(spark_executor_memory)}m",
@@ -115,7 +169,9 @@ def create_recommendations_matrix(spark_executor_cores, spark_executor_memory_ov
                     f"spark.executor.memoryOverheadFactor= {spark_executor_memory_overhead_percent}",
                     f"spark.dynamicAllocation.initialExecutors = {num_executors}",
                     f"spark.dynamicAllocation.enabled=true",
-                    f"spark.submit.deployMode={spark_submit_deploy_mode}"
+                    f"spark.submit.deployMode={spark_submit_deploy_mode}",
+                    f"spark.sql.adaptive.enabled=true",
+                    f"spark.serializer=org.apache.spark.serializer.KryoSerializer"
                     ], 'Explanation' : [
                     f"Amount of memory to use per executor process",
                     "The number of cores to use on each executor in Yarn.  \n  In standalone mode, this will equal all the cores in a node",
@@ -125,7 +181,9 @@ def create_recommendations_matrix(spark_executor_cores, spark_executor_memory_ov
                     f"Fraction of executor memory to be allocated as additional non-heap memory per executor process. This is memory that accounts for things like VM overheads, interned strings, other native overheads, etc. This tends to grow with the container size.",
                     f"Initial number of executors to run if dynamic allocation is enabled.",
                     f"Whether to use dynamic resource allocation, which scales the number of executors registered with this application up and down based on the workload.",
-                    f"Whether to run in client or cluster mode. Cluster mode will run the AM in a Yarn container while client mode will run the AM in the master node"
+                    f"Whether to run in client or cluster mode. Cluster mode will run the AM in a Yarn container while client mode will run the AM in the master node",
+                    f"Adaptive Query Execution (AQE) is an optimization technique in Spark SQL that makes use of the runtime statistics to choose the most efficient query execution plan, which is enabled by default since Apache Spark 3.2.0",
+                    f"This setting configures the serializer used for not only shuffling data between worker nodes but also when serializing RDDs to disk. This is recommended over the Java serializer"
                     ]
                     })
 
@@ -151,6 +209,9 @@ def memory_breakdown_guidance(total_yarn_memory_mb, memory_breakdown, storage_me
 
         display_utilisation_scorecard(total_yarn_memory_mb, total_memory_utilised, total_cores_utilised, total_physical_cores)
 
+
+        
+
 def display_utilisation_scorecard(total_yarn_memory_mb, total_memory_utilised, total_cores_utilised, total_physical_cores):
     utilisation_container = st.container(border=True)
     title , memory, cpu = utilisation_container.columns(3)
@@ -159,15 +220,16 @@ def display_utilisation_scorecard(total_yarn_memory_mb, total_memory_utilised, t
     cpu.metric("CPU Utilisation", f"{total_cores_utilised} vcores" , f"{round((total_cores_utilised - total_physical_cores)/total_physical_cores*100,2)}%" )
 
 def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results):
+    
     with results:
         if spark_num_executors > 0:
-            spark_num_executors = num_executors_per_node * num_workers
+            
             df = create_recommendations_matrix(spark_executor_cores, spark_executor_memory_overhead_percent, \
                                             spark_memory_fraction, spark_memory_storage_fraction, \
                                                 spark_offheap_memory, spark_submit_deploy_mode, \
                                                     spark_onheap_memory, spark_num_executors)
             
-            
+            job_submission_display_tabs(df)            
             st.write(df)
         else:
             st.warning("No executors can be allocated with the current configurations. Please tune the parameters")
@@ -177,12 +239,15 @@ def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory
         user_memory = round(spark_onheap_memory - (storage_memory + execution_memory) - 300,2)
 
         total_memory_utilised = round(spark_onheap_memory * num_executors_per_node * num_workers,2)
-        print(spark_onheap_memory, num_executors_per_node, num_workers)
         total_cores_utilised = spark_executor_cores * num_executors_per_node * num_workers
         total_physical_cores = (cores_per_node - 1)*num_workers if reserve_core == "Yes" else cores_per_node * num_workers
         
+
+        
         display_utilisation_scorecard(total_yarn_memory_mb, total_memory_utilised, total_cores_utilised, total_physical_cores)
     return storage_memory,execution_memory,user_memory,total_memory_utilised,total_cores_utilised,total_physical_cores
+
+
 
 def spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vcores, yarn_memory_mb):
     with executor:
@@ -287,3 +352,70 @@ def set_footer():
         st.markdown(""" \
                     - https://spark.apache.org/docs/3.5.0/tuning.html)
                     """)
+        
+def construct_spark_submit_command(df):
+    """
+    Construct a spark-submit command from a DataFrame with Spark configurations.
+
+    Parameters:
+    - df: DataFrame with columns "Recommended Spark Configurations" and "Explanation".
+
+    Returns:
+    - str: Spark-submit command.
+    """
+    # Extract configurations from the DataFrame
+    configurations = df["Recommended Spark Configurations"]
+
+    # Construct the Spark-submit command
+    spark_submit_command = "spark-submit"
+
+    for config in configurations:
+        spark_submit_command += f" --conf {config}"
+
+    return spark_submit_command
+
+import pandas as pd
+
+def construct_dataproc_submit_command(df, main_class=None, jar_path=None):
+    """
+    Construct a Dataproc job submission command from a DataFrame with Spark configurations.
+
+    Parameters:
+    - df: DataFrame with columns "Recommended Spark Configurations" and "Explanation".
+    - cluster_name: Name of the Dataproc cluster.
+    - region: Region where the Dataproc cluster is located.
+    - main_class: Main class for the Spark application (optional).
+    - jar_path: Path to the JAR file for the Spark application (optional).
+
+    Returns:
+    - str: Dataproc job submission command.
+    """
+    # Extract configurations from the DataFrame
+    configurations = df["Recommended Spark Configurations"]
+
+    # Construct the Spark-submit command
+    spark_submit_command = "spark-submit"
+
+    for config in configurations:
+        spark_submit_command += f" --conf {config}"
+
+    # Construct the Dataproc job submission command
+    dataproc_submit_command = f"gcloud dataproc jobs submit spark \
+        --cluster <cluster_name> \
+        --region <region> \
+        --properties {','.join(configurations)}"
+    
+    dataproc_submit_command += f" --class <main_class> <jar_path>"
+    return spark_submit_command, dataproc_submit_command
+
+
+        
+def render_memory_breakdown_visual(total_yarn_memory_mb):
+        ctr_yarn_memory_mb = st.container(border=True)
+        ctr_spark_executor_memory = ctr_yarn_memory_mb.container(border=True)
+        ctr_shuffle_memory_fraction = st.container(border=True)
+        ctr_spark_memory_fraction = st.container(border=True)
+        ctr_spark_executor_memory_overhead = st.container(border=True)
+
+        ctr_yarn_memory_mb.write(f"yarn.nodemanager.resource.memory-mb = {total_yarn_memory_mb}m")
+        ctr_spark_executor_memory.write(f"{total_yarn_memory_mb}m")

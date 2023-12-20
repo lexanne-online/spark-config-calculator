@@ -22,19 +22,13 @@ def main():
         
     with right_container:
         
-        #sparksubmit, dataproc = right_container.columns([2,10])
-        #sparksubmit.button("spark-submit", on_click=generate_spark_submit_command)
-        #dataproc.button("gcloud dataproc jobs submit spark")
-        
         results, memory_breakdown, revised = st.tabs(["Recommended configurations", "On-heap Memory Breakdown", "Revised Configurations (DefaultResourceCalculator)"])
         
         storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores = recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results)
         memory_breakdown_guidance(total_yarn_memory_mb, memory_breakdown, storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores)
-        revised_recommendations(num_workers, capacity_scheduler, cores_per_node, yarn_memory_mb, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_onheap_memory, revised, total_physical_cores)  
+        revised_recommendations(num_workers, capacity_scheduler, cores_per_node, yarn_memory_mb, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_onheap_memory, revised, total_physical_cores) 
         
         recommendation_notes = st.container(border=True)
-        
-
         if capacity_scheduler == "Default Resource Calculator" :
             recommendation_notes.markdown("""
                         - These configurations ensure that all the memory is used for executors with the assumption that each executor will consume the requested cores. 
