@@ -157,12 +157,14 @@ def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores
     
 
 def job_submission_display_tabs(df_revised):
-    spark_submit, dp_submit = construct_dataproc_submit_command(df_revised)
-    spark_submit_tab, dp_submit_tab = st.tabs(["Spark Submit Command", "Dataproc Submit Command"])
+    spark_submit, dp_submit_spark, dp_submit_pyspark = construct_dataproc_submit_command(df_revised)
+    spark_submit_tab, dp_submit_spark_tab, dp_submit_pyspark_tab = st.tabs(["Spark Submit Command", "Dataproc Submit Command", "Dataproc Pyspark Submit Command"])
     with spark_submit_tab:
         st.code(spark_submit, language="bash")
-    with dp_submit_tab:
-        st.code(dp_submit, language="bash")
+    with dp_submit_spark_tab:
+        st.code(dp_submit_spark, language="bash")
+    with dp_submit_pyspark_tab:
+        st.code(dp_submit_pyspark, language="bash")
 
 def generate_spark_submit_command(spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_executor_memory, num_executors):
 
@@ -419,14 +421,12 @@ def construct_dataproc_submit_command(df, main_class=None, jar_path=None):
     for config in configurations:
         spark_submit_command += f" --conf {config}"
 
+    properties = ','.join(configurations)
     # Construct the Dataproc job submission command
-    dataproc_submit_command = f"gcloud dataproc jobs submit spark \
-        --cluster <cluster_name> \
-        --region <region> \
-        --properties {','.join(configurations)}"
-    
-    dataproc_submit_command += f" --class <main_class> <jar_path>"
-    return spark_submit_command, dataproc_submit_command
+    dataproc_spark_submit_command = f"gcloud dataproc jobs submit spark --cluster <cluster_name> --region <region>  --properties {properties} --class <main_class> <jar_path>"
+    dataproc_pyspark_submit_command = f"gcloud dataproc jobs submit pyspark <script_path> --cluster <cluster_name> --region <region>  --properties {properties} -- <args>"
+
+    return spark_submit_command, dataproc_spark_submit_command, dataproc_pyspark_submit_command
 
 
         
