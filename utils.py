@@ -161,13 +161,13 @@ def create_recommendations_matrix(spark_executor_cores, spark_executor_memory_ov
     
     return pd.DataFrame({
                         'Recommended Spark Configurations': [
-                    f"spark.executor.memory = {int(spark_executor_memory)}m",
-                    f"spark.executor.cores= {spark_executor_cores}",
-                    f"spark.memory.fraction= {spark_memory_fraction}",
-                    f"spark.memory.storageFraction= {spark_memory_storage_fraction}",
-                    f"spark.memory.offHeap.size= {spark_offheap_memory}",
-                    f"spark.executor.memoryOverheadFactor= {spark_executor_memory_overhead_percent}",
-                    f"spark.dynamicAllocation.initialExecutors = {num_executors}",
+                    f"spark.executor.memory={int(spark_executor_memory)}m",
+                    f"spark.executor.cores={spark_executor_cores}",
+                    f"spark.memory.fraction={spark_memory_fraction}",
+                    f"spark.memory.storageFraction={spark_memory_storage_fraction}",
+                    f"spark.memory.offHeap.size={spark_offheap_memory}",
+                    f"spark.executor.memoryOverheadFactor={spark_executor_memory_overhead_percent}",
+                    f"spark.dynamicAllocation.initialExecutors={num_executors}",
                     f"spark.dynamicAllocation.enabled=true",
                     f"spark.submit.deployMode={spark_submit_deploy_mode}",
                     f"spark.sql.adaptive.enabled=true",
