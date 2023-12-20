@@ -301,7 +301,7 @@ def node_config(node, num_workers, capacity_scheduler):
             oversubscribe_cpu = st.checkbox("Do you want to oversubscribe CPU?", help="""
                                             - This number can be greater than the actual vcores to oversubscribe the CPU.
                                             - It is recommended to reserve 1 core per node required for OS/Hadoop daemons
-                                            - This property will take effect only when the DoinantResourceCalculator is used
+                                            - This property will take effect only when the DominantResourceCalculator is used
                                             - Read my blog at https://medium.com/better-programming/understanding-cpu-oversubscription-in-dataproc-hadoop-95eb92e4f45d    """)
             if oversubscribe_cpu:
                 st.markdown("""
