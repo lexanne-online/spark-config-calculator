@@ -2,7 +2,7 @@ import math
 import streamlit as st
 import pandas as pd
 from scipy.optimize import fsolve
-from streamlit_extras.buy_me_a_coffee import button
+
 
 def convert_to_megabytes(size_str):
     if size_str[-1] == 'k':
