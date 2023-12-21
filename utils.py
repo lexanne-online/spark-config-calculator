@@ -124,10 +124,10 @@ def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores
     with revised:
         if capacity_scheduler == "Default Resource Calculator":
             revised_spark_executor_memory = convert_to_megabytes(st.text_input("Revised spark.executor.memory", value=str(spark_onheap_memory) + 'm'))
-            print(f"revised_spark_executor_memory = {revised_spark_executor_memory}")
+            #print(f"revised_spark_executor_memory = {revised_spark_executor_memory}")
             revised_total_container_size_mb = math.ceil((spark_offheap_memory + max(384, spark_executor_memory_overhead_percent*revised_spark_executor_memory) + 
                                                                 revised_spark_executor_memory) / yarn_scheduler_minimum_allocation_mb)*yarn_scheduler_minimum_allocation_mb
-            print(f"revised_total_container_size_mb = {revised_total_container_size_mb}")
+            #print(f"revised_total_container_size_mb = {revised_total_container_size_mb}")
             revised_num_executors_per_node_memory = math.floor(yarn_memory_mb / revised_total_container_size_mb)
             revised_num_executors = max(0,revised_num_executors_per_node_memory*num_workers) if spark_submit_deploy_mode == "client" else max(0,revised_num_executors_per_node_memory*num_workers) - 1
             
@@ -340,7 +340,7 @@ def spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vc
             
         
         spark_onheap_memory = solve_equation(yarn_memory_mb, spark_executor_memory_overhead_percent, spark_offheap_memory, num_executors_per_node, yarn_scheduler_minimum_allocation_mb)
-        print(f"spark_onheap_memory: {spark_onheap_memory}")
+        #print(f"spark_onheap_memory: {spark_onheap_memory}")
         spark_num_executors = max(0,num_executors_per_node*num_workers) if spark_submit_deploy_mode == "client" else max(0,num_executors_per_node*num_workers) - 1
         
 
