@@ -1,4 +1,5 @@
 import math
+import numpy as np
 import streamlit as st
 import pandas as pd
 from scipy.optimize import fsolve
@@ -18,19 +19,30 @@ def convert_to_megabytes(size_str):
     numeric_value = float(size_str[:-1]) * multiplier / 1024 / 1024
     return numeric_value
 
-def solve_equation(yarn_memory_mb, spark_executor_memory_overhead_percent, spark_offheap_memory, num_executors_per_node):
-    initial_guess = 0.0
-    p =  spark_executor_memory_overhead_percent
-    x =  yarn_memory_mb
-    y =  num_executors_per_node
-    m =  spark_offheap_memory
+def solve_equation(yarn_memory_mb, spark_executor_memory_overhead_percent, spark_offheap_memory, num_executors_per_node, yarn_scheduler_minimum_allocation_mb):
+    initial_guess = 0
 
     try:        
-        spark_onheap_memory = int(fsolve(lambda z: z + max(384, p * z) - (x / y - m), initial_guess)[0])
+        #old_spark_onheap_memory = int(fsolve(lambda z: z + max(384, p * z) - (x / y - m), initial_guess)[0])
+        #print(f"old_spark_onheap_memory = {old_spark_onheap_memory}")
+
+        memory_per_container_mb = yarn_memory_mb / num_executors_per_node # x / y
+        
+        equation = lambda z: z - math.floor(
+                                                (memory_per_container_mb - 
+                                                spark_offheap_memory - 
+                                                max(384,spark_executor_memory_overhead_percent * z)) / 
+                                                yarn_scheduler_minimum_allocation_mb
+                                                ) * yarn_scheduler_minimum_allocation_mb
+
+        spark_onheap_memory = fsolve(equation, initial_guess)[0]
+
+        
+          
     except ZeroDivisionError:
         st.error("Number of executors per node cannot be zero")
         exit(-1)
-    return spark_onheap_memory
+    return int(spark_onheap_memory)
 
 
 def set_page_header_format():
@@ -108,20 +120,21 @@ def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores
                                 spark_executor_memory_overhead_percent, spark_memory_fraction, \
                                     spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, \
                                         spark_onheap_memory, revised, total_physical_cores, spark_dynamicallocation_enabled, \
-                                            cluster_name, region):
+                                            cluster_name, region, yarn_scheduler_minimum_allocation_mb):
     with revised:
         if capacity_scheduler == "Default Resource Calculator":
             revised_spark_executor_memory = convert_to_megabytes(st.text_input("Revised spark.executor.memory", value=str(spark_onheap_memory) + 'm'))
-            
-            revised_total_container_size_mb = revised_spark_executor_memory + spark_offheap_memory + max(384,spark_executor_memory_overhead_percent*revised_spark_executor_memory)
-            
-            revised_num_executors_per_node_memory = math.floor(yarn_memory_mb/ (spark_offheap_memory  + max(384,spark_executor_memory_overhead_percent*revised_spark_executor_memory) + revised_spark_executor_memory))
+            print(f"revised_spark_executor_memory = {revised_spark_executor_memory}")
+            revised_total_container_size_mb = math.ceil((spark_offheap_memory + max(384, spark_executor_memory_overhead_percent*revised_spark_executor_memory) + 
+                                                                revised_spark_executor_memory) / yarn_scheduler_minimum_allocation_mb)*yarn_scheduler_minimum_allocation_mb
+            print(f"revised_total_container_size_mb = {revised_total_container_size_mb}")
+            revised_num_executors_per_node_memory = math.floor(yarn_memory_mb / revised_total_container_size_mb)
             revised_num_executors = max(0,revised_num_executors_per_node_memory*num_workers) if spark_submit_deploy_mode == "client" else max(0,revised_num_executors_per_node_memory*num_workers) - 1
             
 
             if revised_num_executors > 0:
-                if math.floor(yarn_memory_mb%(spark_offheap_memory  + spark_executor_memory_overhead_percent*revised_spark_executor_memory + revised_spark_executor_memory)) > 0:
-                    st.warning(f"{math.floor(yarn_memory_mb%(spark_offheap_memory  + spark_executor_memory_overhead_percent*revised_spark_executor_memory + revised_spark_executor_memory))}  MiB will be unused per node resulting in inefficient utilisation")
+                if math.floor(yarn_memory_mb%revised_total_container_size_mb) > 0:
+                    st.warning(f"{math.floor(yarn_memory_mb%revised_total_container_size_mb)}  MiB will be unused per node resulting in inefficient utilisation")
     
                 df_revised = create_recommendations_matrix(spark_executor_cores, spark_executor_memory_overhead_percent, \
                                                         spark_memory_fraction, spark_memory_storage_fraction, \
@@ -132,10 +145,9 @@ def revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores
                 
                 st.write(df_revised)
                 
-                revised_memory_utilised = round((revised_spark_executor_memory + spark_offheap_memory + \
-                                                 max(384, revised_spark_executor_memory*spark_executor_memory_overhead_percent)) * \
-                                                    revised_num_executors_per_node_memory* num_workers ,2)
-                revised_cores_utilised = spark_executor_cores * revised_num_executors_per_node_memory* num_workers 
+                revised_memory_utilised = round(revised_total_container_size_mb * \
+                                                    revised_num_executors ,2)
+                revised_cores_utilised = spark_executor_cores * revised_num_executors* num_workers 
                 
                       
                 storage_memory = round((revised_spark_executor_memory - 300) * spark_memory_storage_fraction * spark_memory_fraction,2)
@@ -251,37 +263,50 @@ def display_utilisation_scorecard(total_yarn_memory_mb, total_memory_utilised, t
     memory.metric("Memory Utilisation", f"{total_memory_utilised}m" , f"{round((total_memory_utilised - total_yarn_memory_mb)/total_yarn_memory_mb*100,2)}%", help="This is the total memory utilised by the containers scheduled by Yarn for the application. This includes offhead and overhead memory" )
     cpu.metric("CPU Utilisation", f"{total_cores_utilised} vcores" , f"{round((total_cores_utilised - total_physical_cores)/total_physical_cores*100,2)}%" )
 
-def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results, spark_dynamicallocation_enabled, cluster_name, region):
-    
+
+def recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, 
+                    spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, 
+                    spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, 
+                    spark_num_executors, results, spark_dynamicallocation_enabled, cluster_name, region, yarn_scheduler_minimum_allocation_mb):
+
     with results:
         if spark_num_executors > 0:
-            
-            df = create_recommendations_matrix(spark_executor_cores, spark_executor_memory_overhead_percent, \
-                                            spark_memory_fraction, spark_memory_storage_fraction, \
-                                                spark_offheap_memory, spark_submit_deploy_mode, \
-                                                    spark_onheap_memory, spark_num_executors, spark_dynamicallocation_enabled)
-            
-            job_submission_display_tabs(df, cluster_name, region)            
+
+            df = create_recommendations_matrix(spark_executor_cores, spark_executor_memory_overhead_percent,
+                                               spark_memory_fraction, spark_memory_storage_fraction,
+                                               spark_offheap_memory, spark_submit_deploy_mode,
+                                               spark_onheap_memory, spark_num_executors, spark_dynamicallocation_enabled)
+
+            job_submission_display_tabs(df, cluster_name, region)
             st.write(df)
         else:
-            st.warning("No executors can be allocated with the current configurations. Please tune the parameters")
+            st.warning(
+                "No executors can be allocated with the current configurations. Please tune the parameters")
 
-        storage_memory = round((spark_onheap_memory - 300) * spark_memory_storage_fraction * spark_memory_fraction,2)
-        execution_memory = round((spark_onheap_memory - 300) * spark_memory_fraction * (1 - spark_memory_storage_fraction),2)
-        user_memory = round(spark_onheap_memory - (storage_memory + execution_memory) - 300,2)
+        storage_memory = round((spark_onheap_memory - 300) *
+                               spark_memory_storage_fraction * spark_memory_fraction, 2)
+        execution_memory = round((spark_onheap_memory - 300) *
+                                 spark_memory_fraction * (1 - spark_memory_storage_fraction), 2)
+        user_memory = round(spark_onheap_memory -
+                            (storage_memory + execution_memory) - 300, 2)
 
-        total_memory_utilised = round((spark_onheap_memory + spark_offheap_memory + spark_executor_memory_overhead_percent*spark_onheap_memory) * num_executors_per_node * num_workers,2)
-        total_cores_utilised = spark_executor_cores * num_executors_per_node * num_workers
-        total_physical_cores = (cores_per_node - 1)*num_workers if reserve_core == "Yes" else cores_per_node * num_workers
+        total_container_size_mb = math.ceil((spark_offheap_memory + max(384, spark_executor_memory_overhead_percent*spark_onheap_memory) + 
+                                                                spark_onheap_memory) / yarn_scheduler_minimum_allocation_mb)*yarn_scheduler_minimum_allocation_mb
+
         
+        total_memory_utilised = round(total_container_size_mb * num_executors_per_node * num_workers, 2)
+        total_cores_utilised = spark_executor_cores * \
+            num_executors_per_node * num_workers
+        total_physical_cores = (
+            cores_per_node - 1)*num_workers if reserve_core == "Yes" else cores_per_node * num_workers
 
-        
-        display_utilisation_scorecard(total_yarn_memory_mb, total_memory_utilised, total_cores_utilised, total_physical_cores)
-    return storage_memory,execution_memory,user_memory,total_memory_utilised,total_cores_utilised,total_physical_cores
+        display_utilisation_scorecard(
+            total_yarn_memory_mb, total_memory_utilised, total_cores_utilised, total_physical_cores)
+    return storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores
 
 
 
-def spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vcores, yarn_memory_mb):
+def spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vcores, yarn_memory_mb, yarn_scheduler_minimum_allocation_mb):
     with executor:
         spark_executor_cores = st.number_input("spark.executor.cores (cores per executor)", 1, yarn_cpu_vcores, \
                                                    help=""" 
@@ -314,7 +339,8 @@ def spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vc
         num_executors_per_node = math.floor(num_executors_per_node_cores)
             
         
-        spark_onheap_memory = solve_equation(yarn_memory_mb, spark_executor_memory_overhead_percent, spark_offheap_memory, num_executors_per_node)
+        spark_onheap_memory = solve_equation(yarn_memory_mb, spark_executor_memory_overhead_percent, spark_offheap_memory, num_executors_per_node, yarn_scheduler_minimum_allocation_mb)
+        print(f"spark_onheap_memory: {spark_onheap_memory}")
         spark_num_executors = max(0,num_executors_per_node*num_workers) if spark_submit_deploy_mode == "client" else max(0,num_executors_per_node*num_workers) - 1
         
 
@@ -323,14 +349,21 @@ def spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vc
 def node_config(node, num_workers, capacity_scheduler):
     with node:
 
-        total_ram_per_node = st.number_input("Total RAM per node in GB", value=16)
+        total_ram_per_node = st.number_input("Total RAM per node in GB", value=16, help="This is the total physical RAM available per node")
         cores_per_node = st.number_input("Cores per node", 1, 100, value=4)
-        yarn_memory_mb = st.number_input("YARN memory per node in MB", value=total_ram_per_node*1024 - total_ram_per_node*1024*0.15, help="""
+        yarn_memory_mb = math.floor(st.number_input("yarn.nodemananger.resource.memory-mb", value=total_ram_per_node*1024 - total_ram_per_node*1024*0.15, help="""
                                         - Provide the value of yarn.nodemananger.resource.memory-mb property in the `yarn-site.xml` file
                                         - Dataproc sets this value to 80-90% of the total memory depending on the machine type
-                                         """)
+                                         """))
             
-            
+        yarn_scheduler_minimum_allocation_mb = st.number_input("yarn.scheduler.minimum-allocation-mb", value=1, help="""
+                                                            - This controls the minimum memory in MB that the scheduler can allocate
+                                                            - This property acts like a step size while creating Yarn containers
+                                                            - The default value is 1 MiB in Dataproc
+                                                            - This value can be modified in the `yarn-site.xml` file
+                                                            - e.g., if yarn.scheduler.minimum-allocation-mb=2048 and the spark.executor.memory + overhead is 2049m, then \
+                                                               the actual container size allocated by Yarn will be ceil(2049/2048)*2048 = 4096m
+                                                            """)
         yarn_cpu_vcores = cores_per_node
         reserve_core = st.radio("Reserve 1 core for OS daemon? Recommended if you are using YARN.", ["Yes", "No"])
         if capacity_scheduler == "Dominant Resource Calculator":
@@ -353,7 +386,7 @@ def node_config(node, num_workers, capacity_scheduler):
         #yarn_memory_gb = (1 - percent_ram_for_os/100) * total_ram_per_node
         #yarn_memory_mb = convert_to_megabytes(f"{yarn_memory_gb}g")
         total_yarn_memory_mb = yarn_memory_mb * num_workers
-    return cores_per_node,yarn_cpu_vcores,reserve_core,yarn_memory_mb,total_yarn_memory_mb
+    return cores_per_node,yarn_cpu_vcores,reserve_core,yarn_memory_mb,total_yarn_memory_mb, yarn_scheduler_minimum_allocation_mb
 
 def cluster_configs(cluster):
     with cluster:

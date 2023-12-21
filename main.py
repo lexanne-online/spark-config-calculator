@@ -14,8 +14,8 @@ def main():
         cluster, node, executor = st.tabs(["Cluster Configuration", "Node Configuration", "Executor Configuration"])
 
         num_workers, capacity_scheduler, cluster_name, region = cluster_configs(cluster)
-        cores_per_node, yarn_cpu_vcores, reserve_core, yarn_memory_mb, total_yarn_memory_mb = node_config(node, num_workers, capacity_scheduler)
-        spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, spark_dynamicallocation_enabled = spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vcores, yarn_memory_mb)            
+        cores_per_node, yarn_cpu_vcores, reserve_core, yarn_memory_mb, total_yarn_memory_mb, yarn_scheduler_minimum_allocation_mb = node_config(node, num_workers, capacity_scheduler)
+        spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, spark_dynamicallocation_enabled = spark_executor_config(executor, num_workers, capacity_scheduler, yarn_cpu_vcores, yarn_memory_mb, yarn_scheduler_minimum_allocation_mb)            
         
     st.markdown("""---""")
   
@@ -26,17 +26,17 @@ def main():
             
             results, memory_breakdown, revised, revised_memory_breakdown = st.tabs(["Recommended configurations", "On-heap Memory Breakdown", "Revised Configurations", "Revised Memory Breakdown"])
         
-            storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores = recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results, spark_dynamicallocation_enabled, cluster_name, region)
+            storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores = recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results, spark_dynamicallocation_enabled, cluster_name, region, yarn_scheduler_minimum_allocation_mb)
             memory_breakdown_guidance(total_yarn_memory_mb, memory_breakdown, storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores)
             
             try:
-                rev_storage_memory, rev_execution_memory, rev_user_memory, rev_total_memory_utilised, rev_total_cores_utilised, rev_total_physical_cores = revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores_per_node, yarn_memory_mb, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_onheap_memory, revised, total_physical_cores, spark_dynamicallocation_enabled, cluster_name, region) 
+                rev_storage_memory, rev_execution_memory, rev_user_memory, rev_total_memory_utilised, rev_total_cores_utilised, rev_total_physical_cores = revised_recommendations(num_workers, capacity_scheduler, reserve_core, cores_per_node, yarn_memory_mb, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, spark_onheap_memory, revised, total_physical_cores, spark_dynamicallocation_enabled, cluster_name, region, yarn_scheduler_minimum_allocation_mb) 
                 memory_breakdown_guidance(total_yarn_memory_mb, revised_memory_breakdown, rev_storage_memory, rev_execution_memory, rev_user_memory, rev_total_memory_utilised, rev_total_cores_utilised, rev_total_physical_cores)
             except TypeError:
                 pass
         else:
             results, memory_breakdown = st.tabs(["Recommended configurations", "On-heap Memory Breakdown"])
-            storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores = recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results, spark_dynamicallocation_enabled, cluster_name, region)
+            storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores = recommendations(num_workers, cores_per_node, reserve_core, total_yarn_memory_mb, spark_executor_cores, spark_executor_memory_overhead_percent, spark_memory_fraction, spark_memory_storage_fraction, spark_offheap_memory, spark_submit_deploy_mode, num_executors_per_node, spark_onheap_memory, spark_num_executors, results, spark_dynamicallocation_enabled, cluster_name, region, yarn_scheduler_minimum_allocation_mb)
             memory_breakdown_guidance(total_yarn_memory_mb, memory_breakdown, storage_memory, execution_memory, user_memory, total_memory_utilised, total_cores_utilised, total_physical_cores)
         
         
